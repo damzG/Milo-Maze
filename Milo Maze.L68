@@ -1,0 +1,761 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 05/03/2026 19:21:52
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : A Text-based Maze Game
+00000000                             3  * Written by : Oyindamola Olaosun
+00000000                             4  * Date       : 16th February, 2026
+00000000                             5  * Description: A simple project explaining nice concepts
+00000000                             6  *-----------------------------------------------------------
+00000000                             7  
+00000000                             8  ;====CONSTANTS Game Items=======
+00000000  =00000032                  9  MAX_MOVES EQU 50 ;Maximum number of moves
+00000000  =00000064                 10  MAX_ENERGY EQU 100 ;Total amount of energy
+00000000  =00000002                 11  ENERGY_PER_MOVE EQU 2 ;Cost per move
+00000000  =0000000A                 12  BOOST_SCORE EQU 10  ;Points from pickup
+00000000  =0000000F                 13  BOOST_ENERGY EQU 15 ; Energy from pickup
+00000000  =0000000D                 14  CR EQU $0D
+00000000  =0000000A                 15  LF EQU $0A
+00000000  =00000008                 16  MAZE_SIZE EQU 8 ;map size
+00000000  =00000040                 17  MAP_CELLS EQU MAZE_SIZE*MAZE_SIZE ;map cells
+00000000                            18  ;0 = empty, 1 = obstacle, 2 = pickup, 3 = goal, 4 = milo on a cell
+00000000                            19  ;.ROUTINE -> local routine
+00000000                            20  
+00001000                            21      ORG    $1000
+00001000                            22      ;Start of the game with a welcome message
+00001000                            23  START:
+00001000  6100 0044                 24      BSR INITIALIZE_GAME ;Resets all game attributes
+00001004  6100 0064                 25      BSR WELCOME
+00001008                            26      
+00001008                            27  MAIN_LOOP:
+00001008  6100 00B4                 28      BSR DISPLAY_STATUS
+0000100C  6100 014A                 29      BSR GET_INPUT
+00001010  6100 0160                 30      BSR VALIDATE_MOVE
+00001014                            31  
+00001014  4A80                      32      TST.L D0
+00001016  67F0                      33      BEQ MAIN_LOOP
+00001018                            34  
+00001018  33F9 000015A6 000015AA    35      MOVE.W PLAYER_X, OLD_X
+00001022  33F9 000015A8 000015AC    36      MOVE.W PLAYER_Y, OLD_Y
+0000102C                            37  
+0000102C  6100 017A                 38      BSR EXECUTE_MOVE
+00001030                            39  
+00001030                            40      ; If goal reached D0 = 1
+00001030  B0BC 00000001             41      CMP.L #1, D0
+00001036  6700 023C                 42      BEQ WIN_GAME
+0000103A                            43  
+0000103A  6100 041A                 44      BSR CHECK_LOSE_CONDITIONS
+0000103E  4A80                      45      TST.L D0
+00001040  6600 025C                 46      BNE LOSE_GAME
+00001044                            47  
+00001044  60C2                      48      BRA MAIN_LOOP
+00001046                            49          
+00001046                            50  
+00001046                            51  INITIALIZE_GAME:
+00001046                            52      ;Resets all player items
+00001046  42B9 00001598             53      CLR.L PLAYER_SCORE
+0000104C  42B9 000015A2             54      CLR.L MOVE_COUNT
+00001052                            55      
+00001052                            56      ;Put max_energy into player energy (before it decreases in the game loop)
+00001052  23FC 00000064 0000159C    57      MOVE.L #MAX_ENERGY, PLAYER_ENERGY
+0000105C                            58      
+0000105C                            59      ;Reset player position
+0000105C  4279 000015A6             60      CLR.W PLAYER_X
+00001062  4279 000015A8             61      CLR.W PLAYER_Y
+00001068  4E75                      62      RTS
+0000106A                            63      
+0000106A                            64  WELCOME:
+0000106A                            65      ;Clear screen first
+0000106A  323C FF00                 66      MOVE.W #$FF00, D1 ;load the entire screen command into D1
+0000106E  700B                      67      MOVE.L #11, D0 ;load the task code 11 into D0 
+00001070  4E4F                      68      TRAP #15
+00001072                            69      
+00001072                            70      ;Top border
+00001072  43F9 000015CF             71      LEA WELCOME_MESSAGE1, A1
+00001078  700D                      72      MOVE.L #13, D0 ;task code 13 with CR/LF
+0000107A  4E4F                      73      TRAP #15
+0000107C                            74      
+0000107C                            75      ;Title
+0000107C  43F9 000015EE             76      LEA WELCOME_MESSAGE2, A1
+00001082  700D                      77      MOVE.L #13, D0
+00001084  4E4F                      78      TRAP #15
+00001086                            79      
+00001086                            80      ;Bottom border
+00001086  43F9 0000160D             81      LEA WELCOME_MESSAGE3, A1
+0000108C  700D                      82      MOVE.L #13, D0
+0000108E  4E4F                      83      TRAP #15
+00001090                            84      
+00001090                            85      ;Instructions
+00001090  43F9 0000162C             86      LEA WELCOME_MESSAGE4, A1
+00001096  700D                      87      MOVE.L #13, D0
+00001098  4E4F                      88      TRAP #15
+0000109A                            89      
+0000109A                            90      ;Controls
+0000109A  43F9 0000164B             91      LEA WELCOME_MESSAGE5, A1
+000010A0  700D                      92      MOVE.L #13, D0
+000010A2  4E4F                      93      TRAP #15
+000010A4                            94      
+000010A4                            95      ;Blank Line
+000010A4  43F9 0000166A             96      LEA WELCOME_MESSAGE6, A1
+000010AA  700D                      97      MOVE.L #13, D0
+000010AC  4E4F                      98      TRAP #15
+000010AE                            99      
+000010AE                           100      ;Wait for player to press any key before continuing
+000010AE  43F9 000017D3            101      LEA PRESS_KEY_MSG, A1
+000010B4  700D                     102      MOVE.L #13, D0
+000010B6  4E4F                     103      TRAP #15
+000010B8                           104      
+000010B8                           105      ;wait for keypress
+000010B8  7005                     106      MOVE.L #5,D0 ;read single character from the keyboard
+000010BA  4E4F                     107      TRAP #15
+000010BC                           108      
+000010BC  4E75                     109      RTS
+000010BE                           110      
+000010BE                           111      
+000010BE                           112  DISPLAY_STATUS:
+000010BE  48E7 C040                113      MOVEM.L D0/D1/A1, -(SP)   ; save before displaying
+000010C2                           114      
+000010C2                           115      ;Clear screen each loop
+000010C2  323C FF00                116      MOVE.W #$FF00, D1
+000010C6  700B                     117      MOVE.L #11, D0
+000010C8  4E4F                     118      TRAP #15
+000010CA                           119  
+000010CA                           120      ;Top border
+000010CA  43F9 00001747            121      LEA STATUS_BORDER, A1
+000010D0  700D                     122      MOVE.L #13, D0
+000010D2  4E4F                     123      TRAP #15
+000010D4                           124  
+000010D4                           125      ; --- Score on its own line ---
+000010D4  43F9 00001768            126      LEA     PLAYER_SCORE_LABEL, A1
+000010DA  700E                     127      MOVE.L  #14, D0 ;task code 14 without CR/LF
+000010DC  4E4F                     128      TRAP    #15
+000010DE  2239 00001598            129      MOVE.L  PLAYER_SCORE, D1
+000010E4  7003                     130      MOVE.L  #3, D0
+000010E6  4E4F                     131      TRAP    #15
+000010E8                           132  
+000010E8                           133      ; --- Energy on its own line ---
+000010E8  123C 000D                134      MOVE.B  #CR, D1        ; Constants CR
+000010EC  7006                     135      MOVE.L  #6, D0
+000010EE  4E4F                     136      TRAP    #15
+000010F0  123C 000A                137      MOVE.B  #LF, D1        ; Constants LF
+000010F4  7006                     138      MOVE.L  #6, D0
+000010F6  4E4F                     139      TRAP    #15
+000010F8                           140  
+000010F8  43F9 00001770            141      LEA     PLAYER_ENERGY_LABEL, A1
+000010FE  700E                     142      MOVE.L  #14, D0
+00001100  4E4F                     143      TRAP    #15
+00001102  2239 0000159C            144      MOVE.L  PLAYER_ENERGY, D1
+00001108  7003                     145      MOVE.L  #3, D0
+0000110A  4E4F                     146      TRAP    #15
+0000110C                           147  
+0000110C                           148      ; --- Move count on its own line ---
+0000110C  123C 000D                149      MOVE.B  #CR, D1
+00001110  7006                     150      MOVE.L  #6, D0 ;Display single character in D1.B
+00001112  4E4F                     151      TRAP    #15
+00001114  123C 000A                152      MOVE.B  #LF, D1
+00001118  7006                     153      MOVE.L  #6, D0 ;Display single character in D1.B
+0000111A  4E4F                     154      TRAP    #15
+0000111C                           155  
+0000111C  43F9 0000177C            156      LEA     MOVE_COUNT_LABEL, A1
+00001122  700E                     157      MOVE.L  #14, D0
+00001124  4E4F                     158      TRAP    #15
+00001126  2239 000015A2            159      MOVE.L  MOVE_COUNT, D1
+0000112C  7003                     160      MOVE.L  #3, D0
+0000112E  4E4F                     161      TRAP    #15
+00001130                           162  
+00001130                           163      ; --- Final newline before prompt ---
+00001130  123C 000D                164      MOVE.B  #CR, D1
+00001134  7006                     165      MOVE.L  #6, D0
+00001136  4E4F                     166      TRAP    #15
+00001138  123C 000A                167      MOVE.B  #LF, D1
+0000113C  7006                     168      MOVE.L  #6, D0
+0000113E  4E4F                     169      TRAP    #15
+00001140                           170  
+00001140  43F9 00001747            171      LEA STATUS_BORDER, A1 ;Bottom border
+00001146  700D                     172      MOVE.L #13, D0
+00001148  4E4F                     173      TRAP #15
+0000114A                           174  
+0000114A  6100 032E                175      BSR DISPLAY_MAZE ;show maze
+0000114E  6100 03F2                176      BSR DISPLAY_LEGEND ;show legend
+00001152                           177  
+00001152  4CDF 0203                178      MOVEM.L (SP)+, D0/D1/A1   ;  restore after
+00001156  4E75                     179      RTS
+00001158                           180      
+00001158                           181      
+00001158                           182  GET_INPUT:  
+00001158                           183      ;Prints input string
+00001158  43F9 000015AE            184      LEA INPUT_MESSAGE, A1
+0000115E  103C 000E                185      MOVE.B #14, D0
+00001162  4E4F                     186      TRAP #15
+00001164                           187      
+00001164                           188      ;Input a keyboard character like in asphalt nitro game
+00001164  103C 0005                189      MOVE.B #5, D0
+00001168  4E4F                     190      TRAP #15
+0000116A                           191      ;When you input a character, it lands in D1.B
+0000116A  13C1 000015A0            192      MOVE.B D1, INPUT_CHAR
+00001170  4E75                     193      RTS
+00001172                           194      
+00001172                           195      
+00001172                           196  ;Validating each character move before execution
+00001172                           197  VALIDATE_MOVE:    
+00001172  1239 000015A0            198      MOVE.B INPUT_CHAR, D1
+00001178                           199      
+00001178  B23C 0057                200      CMP.B #'W', D1
+0000117C  6700 01CC                201      BEQ MOVE_UP
+00001180  B23C 0041                202      CMP.B #'A', D1
+00001184  6700 01FC                203      BEQ MOVE_LEFT
+00001188  B23C 0053                204      CMP.B #'S', D1
+0000118C  6700 022C                205      BEQ MOVE_DOWN
+00001190  B23C 0044                206      CMP.B #'D', D1
+00001194  6700 025E                207      BEQ MOVE_RIGHT
+00001198                           208      
+00001198                           209  INVALID:
+00001198  43F9 00001689            210      LEA ERROR_MSG, A1
+0000119E  103C 000E                211      MOVE.B #14, D0
+000011A2  4E4F                     212      TRAP #15
+000011A4  4280                     213      CLR.L D0
+000011A6  4E75                     214      RTS
+000011A8                           215      
+000011A8                           216      
+000011A8                           217  EXECUTE_MOVE:
+000011A8  48E7 7080                218      MOVEM.L D1/D2/D3/A0, -(SP)
+000011AC                           219      
+000011AC                           220      ; Compute new position index
+000011AC                           221      ;Using the offset formula y * (no of columns) + x
+000011AC  3439 000015A8            222      MOVE.W  PLAYER_Y, D2
+000011B2  C4FC 0008                223      MULU.W #MAZE_SIZE, D2
+000011B6  3639 000015A6            224      MOVE.W  PLAYER_X, D3
+000011BC  D443                     225      ADD.W   D3, D2
+000011BE  41F9 00001558            226      LEA     GAME_MAP, A0
+000011C4                           227  
+000011C4                           228      ; Check GOAL (3)
+000011C4  0C30 0003 2000           229      CMP.B   #3, (A0, D2)
+000011CA  6700 0046                230      BEQ     .GOAL_REACHED
+000011CE                           231  
+000011CE                           232      ; Check PICKUP (2)
+000011CE  0C30 0002 2000           233      CMP.B   #2, (A0, D2)
+000011D4  6600 0010                234      BNE     .NORMAL_MOVE
+000011D8                           235  
+000011D8  6100 0134                236      BSR     COLLECT_PICKUP
+000011DC  11BC 0000 2000           237      MOVE.B  #0, (A0, D2) (empty)
+000011E2  6000 0008                238      BRA     .AFTER_MOVE
+000011E6                           239  
+000011E6                           240  .NORMAL_MOVE:
+000011E6  11BC 0004 2000           241      MOVE.B  #4, (A0, D2) (player on a cell)
+000011EC                           242  
+000011EC                           243  .AFTER_MOVE:
+000011EC                           244      ;Now clear old position
+000011EC  3039 000015AC            245      MOVE.W OLD_Y, D0
+000011F2  C0FC 0008                246      MULU.W #MAZE_SIZE, D0
+000011F6  3239 000015AA            247      MOVE.W OLD_X, D1
+000011FC  D041                     248      ADD.W D1, D0
+000011FE  11BC 0000 0000           249      MOVE.B #0, (A0, D0)
+00001204                           250      
+00001204  6100 0046                251      BSR     INCREMENT_MOVES
+00001208  6100 0052                252      BSR     DECREASE_ENERGY
+0000120C                           253  
+0000120C  7000                     254      MOVE.L  #0, D0     ; Normal move
+0000120E  6000 0036                255      BRA     .DONE
+00001212                           256  
+00001212                           257  .GOAL_REACHED:
+00001212                           258      ;Now clear old position
+00001212  3039 000015AC            259      MOVE.W OLD_Y, D0
+00001218  C0FC 0008                260      MULU.W #MAZE_SIZE, D0
+0000121C  3239 000015AA            261      MOVE.W OLD_X, D1
+00001222  D041                     262      ADD.W D1, D0
+00001224  11BC 0000 0000           263      MOVE.B #0, (A0, D0)
+0000122A                           264  
+0000122A  6100 0020                265      BSR     INCREMENT_MOVES
+0000122E                           266      
+0000122E                           267      ;Give Goal Bonus Score
+0000122E  2039 00001598            268      MOVE.L PLAYER_SCORE, D0
+00001234  0680 00000064            269      ADD.L #100, D0
+0000123A  23C0 00001598            270      MOVE.L D0, PLAYER_SCORE
+00001240                           271      
+00001240  7001                     272      MOVE.L  #1, D0     ; Signal win
+00001242  6000 0002                273      BRA .DONE
+00001246                           274  
+00001246                           275  .DONE:
+00001246  4CDF 010E                276      MOVEM.L (SP)+, D1/D2/D3/A0
+0000124A  4E75                     277      RTS
+0000124C                           278  
+0000124C                           279  INCREMENT_MOVES:              ;increment moves
+0000124C  2039 000015A2            280      MOVE.L  MOVE_COUNT, D0
+00001252  5280                     281      ADDQ.L  #1, D0
+00001254  23C0 000015A2            282      MOVE.L  D0, MOVE_COUNT
+0000125A  4E75                     283      RTS
+0000125C                           284      
+0000125C                           285      ;Cost per move subtracted from the player energy
+0000125C                           286  DECREASE_ENERGY:
+0000125C  2039 0000159C            287      MOVE.L PLAYER_ENERGY, D0
+00001262  5580                     288      SUB.L  #ENERGY_PER_MOVE, D0
+00001264                           289  
+00001264  4A80                     290      TST.L  D0
+00001266  6E00 0004                291      BGT    .STORE
+0000126A                           292  
+0000126A  7000                     293      MOVE.L #0, D0
+0000126C                           294  
+0000126C                           295  .STORE:
+0000126C  23C0 0000159C            296      MOVE.L D0, PLAYER_ENERGY
+00001272  4E75                     297      RTS
+00001274                           298      
+00001274                           299      ;When goal is reached time for win
+00001274                           300  WIN_GAME:
+00001274  323C FF00                301      MOVE.W  #$FF00, D1
+00001278  700B                     302      MOVE.L  #11, D0
+0000127A  4E4F                     303      TRAP    #15
+0000127C  43F9 000016BF            304      LEA     WIN_BORDER, A1
+00001282  700D                     305      MOVE.L  #13, D0
+00001284  4E4F                     306      TRAP    #15
+00001286  43F9 000016AD            307      LEA     WIN_MESSAGE, A1
+0000128C  700D                     308      MOVE.L  #13, D0
+0000128E  4E4F                     309      TRAP    #15
+00001290  43F9 000016BF            310      LEA     WIN_BORDER, A1
+00001296  700D                     311      MOVE.L  #13, D0
+00001298  4E4F                     312      TRAP    #15
+0000129A                           313  
+0000129A  6000 002C                314      BRA END_GAME    
+0000129E                           315      
+0000129E                           316      ;When player energy runs out
+0000129E                           317  LOSE_GAME:
+0000129E  323C FF00                318      MOVE.W  #$FF00, D1
+000012A2  700B                     319      MOVE.L  #11, D0
+000012A4  4E4F                     320      TRAP    #15
+000012A6  43F9 000016D0            321      LEA     LOSE_BORDER, A1
+000012AC  700D                     322      MOVE.L  #13, D0
+000012AE  4E4F                     323      TRAP    #15
+000012B0  43F9 000016E2            324      LEA     LOSE_MESSAGE, A1
+000012B6  700D                     325      MOVE.L  #13, D0
+000012B8  4E4F                     326      TRAP    #15
+000012BA  43F9 000016D0            327      LEA     LOSE_BORDER, A1
+000012C0  700D                     328      MOVE.L  #13, D0
+000012C2  4E4F                     329      TRAP    #15
+000012C4  6000 0002                330      BRA END_GAME
+000012C8                           331      
+000012C8                           332      ;Time to finish the game and display result   
+000012C8                           333  END_GAME:
+000012C8  43F9 000016FD            334      LEA     FINAL_LABEL, A1
+000012CE  700E                     335      MOVE.L  #14, D0
+000012D0  4E4F                     336      TRAP    #15
+000012D2  2239 00001598            337      MOVE.L  PLAYER_SCORE, D1
+000012D8  7003                     338      MOVE.L  #3, D0
+000012DA  4E4F                     339      TRAP    #15
+000012DC  43F9 0000170B            340      LEA     FINAL_MOVES, A1
+000012E2  700E                     341      MOVE.L  #14, D0
+000012E4  4E4F                     342      TRAP    #15
+000012E6  2239 000015A2            343      MOVE.L  MOVE_COUNT, D1
+000012EC  7003                     344      MOVE.L  #3, D0
+000012EE  4E4F                     345      TRAP    #15
+000012F0                           346      ; --- Energy on its own line ---
+000012F0  123C 000D                347      MOVE.B  #CR, D1        ; CR
+000012F4  7006                     348      MOVE.L  #6, D0
+000012F6  4E4F                     349      TRAP    #15
+000012F8  123C 000A                350      MOVE.B  #LF, D1        ; LF
+000012FC  7006                     351      MOVE.L  #6, D0
+000012FE  4E4F                     352      TRAP    #15
+00001300  43F9 0000171B            353      LEA     GOODBYE, A1
+00001306  700D                     354      MOVE.L  #13, D0
+00001308  4E4F                     355      TRAP    #15
+0000130A                           356      ;Terminate
+0000130A  FFFF FFFF                357      SIMHALT
+0000130E                           358      
+0000130E                           359  ;==Collect pickup===
+0000130E                           360  COLLECT_PICKUP:
+0000130E  48E7 8000                361      MOVEM.L D0, -(SP)
+00001312                           362  
+00001312                           363      ; --- Add to score ---
+00001312  2039 00001598            364      MOVE.L  PLAYER_SCORE, D0
+00001318  0680 0000000A            365      ADD.L   #BOOST_SCORE, D0
+0000131E  23C0 00001598            366      MOVE.L  D0, PLAYER_SCORE
+00001324                           367  
+00001324                           368      ; --- Add to energy ---
+00001324  2039 0000159C            369      MOVE.L  PLAYER_ENERGY, D0
+0000132A  0680 0000000F            370      ADD.L   #BOOST_ENERGY, D0
+00001330                           371  
+00001330                           372      ; --- Cap energy at maximum ---
+00001330  B0BC 00000064            373      CMP.L   #MAX_ENERGY, D0
+00001336  6F02                     374      BLE.S   .STORE
+00001338  7064                     375      MOVE.L  #MAX_ENERGY, D0
+0000133A                           376  
+0000133A                           377  .STORE:
+0000133A  23C0 0000159C            378      MOVE.L  D0, PLAYER_ENERGY
+00001340                           379  
+00001340  4CDF 0001                380      MOVEM.L (SP)+, D0   ; RESTORE REGISTER
+00001344  4E75                     381      RTS
+00001346                           382  
+00001346                           383  BLOCKED:
+00001346  7000                     384      MOVE.L #0, D0
+00001348  4E75                     385      RTS
+0000134A                           386  
+0000134A                           387  
+0000134A                           388  MOVE_UP:
+0000134A                           389      ;Goes from row 2 to row 1 so it will subtract
+0000134A  3039 000015A8            390      MOVE.W PLAYER_Y, D0
+00001350  5340                     391      SUB.W #1, D0
+00001352                           392      ;Check before saving
+00001352  B07C 0000                393      CMP.W #0, D0 ; are you at the top edge
+00001356  6DEE                     394      BLT BLOCKED ;if less than 0, can't move there
+00001358  3600                     395      MOVE.W D0, D3
+0000135A  3239 000015A6            396      MOVE.W PLAYER_X, D1
+00001360  6100 00CC                397      BSR OBSTACLE_CHECK
+00001364  4A80                     398      TST.L D0 ;check if blocked
+00001366  6700 0018                399      BEQ .DONE
+0000136A  33C3 000015A8            400      MOVE.W D3, PLAYER_Y ;only save now
+00001370  303C 0001                401      MOVE.W #1, D0 ;successfull move
+00001374  43F9 00001787            402      LEA UP_MESSAGE, A1
+0000137A  700E                     403      MOVE.L #14, D0
+0000137C  4E4F                     404      TRAP #15
+0000137E  7001                     405      MOVE.L #1, D0
+00001380                           406  .DONE:
+00001380  4E75                     407      RTS
+00001382                           408  
+00001382                           409  MOVE_LEFT:
+00001382                           410      ;Goes from column 2 to column 1 so it will subtract
+00001382  3239 000015A6            411      MOVE.W PLAYER_X, D1
+00001388  5341                     412      SUB.W #1, D1
+0000138A  B27C 0000                413      CMP.W #0, D1 ; are you at the leftmost edge
+0000138E  6DB6                     414      BLT BLOCKED ; if less than 0, can't move there
+00001390  3601                     415      MOVE.W D1, D3
+00001392  3039 000015A8            416      MOVE.W PLAYER_Y, D0
+00001398  6100 0094                417      BSR OBSTACLE_CHECK ;check for obstacle
+0000139C  4A80                     418      TST.L D0 ;check if blocked
+0000139E  6700 0018                419      BEQ .DONE
+000013A2  33C3 000015A6            420      MOVE.W D3, PLAYER_X ;only save now
+000013A8  303C 0001                421      MOVE.W #1, D0 ;successfull move
+000013AC  43F9 000017AD            422      LEA LEFT_MESSAGE, A1
+000013B2  700E                     423      MOVE.L #14, D0
+000013B4  4E4F                     424      TRAP #15
+000013B6  7001                     425      MOVE.L #1, D0
+000013B8                           426  .DONE:
+000013B8  4E75                     427      RTS
+000013BA                           428  
+000013BA                           429  MOVE_DOWN: 
+000013BA                           430      ;Goes from row 1 to row 2 so it will add 1
+000013BA  3039 000015A8            431      MOVE.W PLAYER_Y, D0 
+000013C0  5240                     432      ADD.W #1, D0
+000013C2                           433      ;Check before saving
+000013C2  B07C 0007                434      CMP.W #(MAZE_SIZE-1), D0 ;are you at the last row 
+000013C6  6E00 FF7E                435      BGT BLOCKED
+000013CA  3600                     436      MOVE.W D0, D3
+000013CC  3239 000015A6            437      MOVE.W PLAYER_X, D1
+000013D2  6100 005A                438      BSR OBSTACLE_CHECK ;Check for obstacle
+000013D6  4A80                     439      TST.L D0 ;check if blocked
+000013D8  6700 0018                440      BEQ .DONE
+000013DC  33C3 000015A8            441      MOVE.W D3, PLAYER_Y ; only save now
+000013E2  303C 0001                442      MOVE.W #1, D0 ; successful move
+000013E6  43F9 0000179A            443      LEA DOWN_MESSAGE, A1
+000013EC  700E                     444      MOVE.L #14, D0
+000013EE  4E4F                     445      TRAP #15
+000013F0  7001                     446      MOVE.L #1, D0
+000013F2                           447  .DONE:
+000013F2  4E75                     448      RTS
+000013F4                           449      
+000013F4                           450  MOVE_RIGHT:
+000013F4                           451      ;Goes from column 1 to column 2
+000013F4  3239 000015A6            452      MOVE.W PLAYER_X, D1
+000013FA  5241                     453      ADD.W #1, D1
+000013FC  B27C 0007                454      CMP.W #(MAZE_SIZE-1), D1 ;are you at the last column
+00001400  6E00 FF44                455      BGT BLOCKED
+00001404                           456      ;check obstacle
+00001404  3601                     457      MOVE.W D1, D3
+00001406  3039 000015A8            458      MOVE.W PLAYER_Y, D0
+0000140C  6100 0020                459      BSR OBSTACLE_CHECK
+00001410  4A80                     460      TST.L D0 ;check if blocked
+00001412  6700 0018                461      BEQ .DONE ;if D0=0 hit, skip saving
+00001416  33C3 000015A6            462      MOVE.W D3, PLAYER_X ;only save now
+0000141C  303C 0001                463      MOVE.W #1, D0 ;successful move
+00001420  43F9 000017C0            464      LEA RIGHT_MESSAGE, A1
+00001426  700E                     465      MOVE.L #14, D0
+00001428  4E4F                     466      TRAP #15
+0000142A  7001                     467      MOVE.L #1, D0 ; restore D0=1 AFTER trap call
+0000142C                           468  .DONE:
+0000142C  4E75                     469      RTS
+0000142E                           470      
+0000142E                           471  OBSTACLE_CHECK:
+0000142E  48E7 5080                472      MOVEM.L D1/D3/A0, -(SP)
+00001432                           473  
+00001432  C0FC 0008                474      MULU.W  #MAZE_SIZE, D0
+00001436  D041                     475      ADD.W   D1, D0
+00001438  41F9 00001558            476      LEA     GAME_MAP, A0
+0000143E                           477  
+0000143E  0C30 0001 0000           478      CMP.B   #1, (A0, D0) ; is this cell a wall (1)
+00001444  6700 0008                479      BEQ     .BLOCKED
+00001448                           480  
+00001448  7001                     481      MOVE.L  #1, D0
+0000144A  6000 0004                482      BRA     .DONE
+0000144E                           483  
+0000144E                           484  .BLOCKED:
+0000144E  7000                     485      MOVE.L  #0, D0
+00001450                           486  
+00001450                           487  .DONE:
+00001450  4CDF 010A                488      MOVEM.L (SP)+, D1/D3/A0
+00001454  4E75                     489      RTS
+00001456                           490    
+00001456                           491  CHECK_LOSE_CONDITIONS:
+00001456                           492      ;Compares player move count and MAX_MOVES
+00001456  2039 000015A2            493      MOVE.L MOVE_COUNT, D0
+0000145C  B0BC 00000032            494      CMP.L #MAX_MOVES, D0
+00001462  6400 0012                495      BHS .LOSE
+00001466                           496      
+00001466  2039 0000159C            497      MOVE.L PLAYER_ENERGY, D0
+0000146C  4A80                     498      TST.L D0
+0000146E  6700 0006                499      BEQ .LOSE
+00001472                           500      
+00001472  7000                     501      MOVE.L #0, D0
+00001474  4E75                     502      RTS     
+00001476                           503  .LOSE:
+00001476  7001                     504      MOVE.L #1, D0
+00001478  4E75                     505      RTS
+0000147A                           506      
+0000147A                           507  DISPLAY_MAZE:
+0000147A  48E7 FCC0                508      MOVEM.L D0/D1/D2/D3/D4/D5/A0/A1, -(SP)  ;save A1 too
+0000147E  41F9 00001558            509      LEA     GAME_MAP, A0 ;A0 = base address (used for reference)
+00001484  43F9 00001558            510      LEA     GAME_MAP, A1      ; A1 walks through map byte by byte
+0000148A  4282                     511      CLR.L   D2                ; row counter starts at 0
+0000148C                           512  ;Outer loop - rows
+0000148C                           513  .ROW_LOOP:
+0000148C  4283                     514      CLR.L   D3                ; reset col counter to 0 each new row
+0000148E                           515  ;Inner loop - columns
+0000148E                           516  .COL_LOOP:
+0000148E  1819                     517      MOVE.B  (A1)+, D4         ; read byte and advance pointer directly
+00001490                           518      ;D4 holds the raw map value for this cell while D2/D3 track 
+00001490                           519      ;where we are for player position
+00001490  3A39 000015A8            520      MOVE.W  PLAYER_Y, D5
+00001496  BA42                     521      CMP.W   D2, D5 ;does current row match player row?
+00001498  6600 001A                522      BNE     .NOT_PLAYER
+0000149C  3A39 000015A6            523      MOVE.W  PLAYER_X, D5
+000014A2  BA43                     524      CMP.W   D3, D5 ; does current col match player col?
+000014A4  6600 000E                525      BNE     .NOT_PLAYER
+000014A8                           526  
+000014A8  123C 004D                527      MOVE.B  #'M', D1 ;both match - print player marker
+000014AC  7006                     528      MOVE.L  #6, D0
+000014AE  4E4F                     529      TRAP    #15
+000014B0  6000 005A                530      BRA     .NEXT_COL
+000014B4                           531  
+000014B4                           532  ;D4 0, 1,2 ,3 ,4 -> Empty cell, wall, pickup, goal, previously visited
+000014B4                           533  .NOT_PLAYER:
+000014B4  B83C 0000                534      CMP.B   #0, D4
+000014B8  6600 000A                535      BNE     .CHECK_WALL
+000014BC  123C 002E                536      MOVE.B  #'.', D1
+000014C0  6000 0046                537      BRA     .PRINT
+000014C4                           538  
+000014C4                           539  .CHECK_WALL:
+000014C4  B83C 0001                540      CMP.B   #1, D4
+000014C8  6600 000A                541      BNE     .CHECK_PICKUP
+000014CC  123C 0023                542      MOVE.B  #'#', D1
+000014D0  6000 0036                543      BRA     .PRINT
+000014D4                           544  
+000014D4                           545  .CHECK_PICKUP:
+000014D4  B83C 0002                546      CMP.B   #2, D4
+000014D8  6600 000A                547      BNE     .CHECK_GOAL
+000014DC  123C 002A                548      MOVE.B  #'*', D1
+000014E0  6000 0026                549      BRA     .PRINT
+000014E4                           550  
+000014E4                           551  .CHECK_GOAL:
+000014E4  B83C 0003                552      CMP.B   #3, D4
+000014E8  6600 000A                553      BNE     .CHECK_TRAIL
+000014EC  123C 0047                554      MOVE.B  #'G', D1
+000014F0  6000 0016                555      BRA     .PRINT
+000014F4                           556  
+000014F4                           557  .CHECK_TRAIL:
+000014F4  B83C 0004                558      CMP.B   #4, D4
+000014F8  6600 000A                559      BNE     .PRINT_UNKNOWN
+000014FC  123C 002B                560      MOVE.B  #'+', D1
+00001500  6000 0006                561      BRA     .PRINT
+00001504                           562  
+00001504                           563  .PRINT_UNKNOWN:
+00001504  123C 003F                564      MOVE.B  #'?', D1
+00001508                           565  
+00001508                           566  .PRINT:
+00001508  7006                     567      MOVE.L  #6, D0 ;Print out character in the loop
+0000150A  4E4F                     568      TRAP    #15
+0000150C                           569      
+0000150C                           570  ;Print space and advance column
+0000150C                           571  .NEXT_COL:
+0000150C  123C 0020                572      MOVE.B  #' ', D1 ;space between cells for readability
+00001510  7006                     573      MOVE.L  #6, D0
+00001512  4E4F                     574      TRAP    #15
+00001514                           575  
+00001514  5283                     576      ADDQ.L  #1, D3  ;col++
+00001516  B6BC 00000008            577      CMP.L   #MAZE_SIZE, D3 ; reached end of row?
+0000151C  6D00 FF70                578      BLT     .COL_LOOP
+00001520                           579  
+00001520                           580      ;New line after each row
+00001520  123C 000D                581      MOVE.B  #CR, D1
+00001524  7006                     582      MOVE.L  #6, D0
+00001526  4E4F                     583      TRAP    #15
+00001528  123C 000A                584      MOVE.B  #LF, D1
+0000152C  7006                     585      MOVE.L  #6, D0
+0000152E  4E4F                     586      TRAP    #15
+00001530                           587  
+00001530  5282                     588      ADDQ.L  #1, D2
+00001532  B4BC 00000008            589      CMP.L   #MAZE_SIZE, D2
+00001538  6D00 FF52                590      BLT     .ROW_LOOP
+0000153C                           591  
+0000153C                           592      ;Restore and return
+0000153C  4CDF 033F                593      MOVEM.L (SP)+, D0/D1/D2/D3/D4/D5/A0/A1  ;
+00001540  4E75                     594      RTS    
+00001542                           595  DISPLAY_LEGEND:
+00001542  43F9 000017ED            596      LEA LEGEND_MSG1, A1
+00001548  700D                     597      MOVE.L #13, D0
+0000154A  4E4F                     598      TRAP #15
+0000154C  43F9 00001804            599      LEA LEGEND_MSG2, A1
+00001552  700D                     600      MOVE.L #13, D0
+00001554  4E4F                     601      TRAP #15
+00001556  4E75                     602      RTS
+00001558                           603      
+00001558                           604  ;The Milo Maze
+00001558                           605  GAME_MAP:
+00001558= 00 00 02 00 01 00 ...    606       DC.B 0,0,2,0,1,0,0,0
+00001560= 01 00 00 00 00 00 ...    607       DC.B 1,0,0,0,0,0,1,0
+00001568= 00 02 01 02 00 00 ...    608       DC.B 0,2,1,2,0,0,0,0
+00001570= 00 00 00 00 01 00 ...    609       DC.B 0,0,0,0,1,0,2,0
+00001578= 02 00 01 00 00 00 ...    610       DC.B 2,0,1,0,0,0,0,0
+00001580= 00 00 00 01 00 00 ...    611       DC.B 0,0,0,1,0,0,1,0
+00001588= 00 01 00 00 00 02 ...    612       DC.B 0,1,0,0,0,2,0,0
+00001590= 00 00 00 01 00 00 ...    613       DC.B 0,0,0,1,0,0,0,3     
+00001598                           614          
+00001598                           615  ;=====Variables========
+00001598                           616  
+00001598                           617  ;===Player Attributes===
+00001598= 00000000                 618  PLAYER_SCORE: dc.l 0
+0000159C= 00000064                 619  PLAYER_ENERGY: dc.l 100
+000015A0= 00                       620  INPUT_CHAR: dc.b 0
+000015A2= 00000000                 621  MOVE_COUNT: dc.l 0
+000015A6= 0000                     622  PLAYER_X: dc.w 0
+000015A8= 0000                     623  PLAYER_Y: dc.w 0
+000015AA= 0000                     624  OLD_X: dc.w 0
+000015AC= 0000                     625  OLD_Y: dc.w 0
+000015AE                           626  
+000015AE                           627  ;===Game message===
+000015AE= 45 6E 74 65 72 20 ...    628  INPUT_MESSAGE: dc.b 'Enter your preferred direction: ', 0
+000015CF= 3D 3D 3D 3D 3D 3D ...    629  WELCOME_MESSAGE1:   DC.B '==============================', 0
+000015EE= 20 20 20 20 20 20 ...    630  WELCOME_MESSAGE2:   DC.B '       *** MILO MAZE ***      ', 0
+0000160D= 3D 3D 3D 3D 3D 3D ...    631  WELCOME_MESSAGE3:   DC.B '==============================', 0
+0000162C= 4E 61 76 69 67 61 ...    632  WELCOME_MESSAGE4:   DC.B 'Navigate Milo through the maze', 0
+0000164B= 57 3D 55 70 20 20 ...    633  WELCOME_MESSAGE5:   DC.B 'W=Up  A=Left  S=Down  D=Right ', 0
+0000166A= 2D 2D 2D 2D 2D 2D ...    634  WELCOME_MESSAGE6:   DC.B '------------------------------', 0
+00001689                           635  
+00001689= 21 21 20 49 6E 76 ...    636  ERROR_MSG: dc.b '!! Invalid input - Use W A S D only',0
+000016AD= 4D 69 6C 6F 20 6D ...    637  WIN_MESSAGE: dc.b 'Milo made it out!', 0
+000016BF= 2A 2A 2A 20 59 4F ...    638  WIN_BORDER:   DC.B  '*** YOU WIN! ***', 0
+000016D0= 21 21 21 20 47 41 ...    639  LOSE_BORDER:  DC.B  '!!! GAME OVER !!!', 0
+000016E2= 4D 69 6C 6F 20 69 ...    640  LOSE_MESSAGE: dc.b 'Milo is lost in a ditch...', 0
+000016FD= 46 69 6E 61 6C 20 ...    641  FINAL_LABEL:  DC.B  'Final Score: ', 0
+0000170B= 20 20 54 6F 74 61 ...    642  FINAL_MOVES:  DC.B  '  Total Moves: ', 0
+0000171B= 54 68 61 6E 6B 73 ...    643  GOODBYE:      DC.B  'Thanks for playing Milo Maze!', 0
+00001739= 46 69 6E 61 6C 20 ...    644  FINAL_SCORE_MESSAGE: dc.b 'Final Score: ', 0
+00001747= 2D 2D 2D 2D 2D 2D ...    645  STATUS_BORDER: DC.B '--------------------------------', 0
+00001768= 53 63 6F 72 65 3A ...    646  PLAYER_SCORE_LABEL: dc.b 'Score: ', 0
+00001770= 20 7C 20 45 6E 65 ...    647  PLAYER_ENERGY_LABEL: dc.b ' | Energy: ', 0
+0000177C= 20 7C 20 4D 6F 76 ...    648  MOVE_COUNT_LABEL: dc.b ' | Moves: ', 0
+00001787= 3E 3E 20 4D 6F 76 ...    649  UP_MESSAGE:     DC.B  '>> Moving Up...   ', 0
+0000179A= 3E 3E 20 4D 6F 76 ...    650  DOWN_MESSAGE:   DC.B  '>> Moving Down... ', 0
+000017AD= 3E 3E 20 4D 6F 76 ...    651  LEFT_MESSAGE:   DC.B  '>> Moving Left... ', 0
+000017C0= 3E 3E 20 4D 6F 76 ...    652  RIGHT_MESSAGE:  DC.B  '>> Moving Right...', 0
+000017D3= 50 72 65 73 73 20 ...    653  PRESS_KEY_MSG: DC.B 'Press any key to start...',0
+000017ED= 4D 3D 59 6F 75 20 ...    654  LEGEND_MSG1: DC.B 'M=You  .=Empty  #=Wall', 0
+00001804= 2A 3D 50 69 63 6B ...    655  LEGEND_MSG2: DC.B '*=Pickup  G=Goal  +=Visited', 0
+00001820                           656  
+00001820                           657      END    START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLOCKED             1346
+BOOST_ENERGY        F
+BOOST_SCORE         A
+CHECK_LOSE_CONDITIONS  1456
+CHECK_LOSE_CONDITIONS:LOSE  1476
+COLLECT_PICKUP      130E
+COLLECT_PICKUP:STORE  133A
+CR                  D
+DECREASE_ENERGY     125C
+DECREASE_ENERGY:STORE  126C
+DISPLAY_LEGEND      1542
+DISPLAY_MAZE        147A
+DISPLAY_MAZE:CHECK_GOAL  14E4
+DISPLAY_MAZE:CHECK_PICKUP  14D4
+DISPLAY_MAZE:CHECK_TRAIL  14F4
+DISPLAY_MAZE:CHECK_WALL  14C4
+DISPLAY_MAZE:COL_LOOP  148E
+DISPLAY_MAZE:NEXT_COL  150C
+DISPLAY_MAZE:NOT_PLAYER  14B4
+DISPLAY_MAZE:PRINT  1508
+DISPLAY_MAZE:PRINT_UNKNOWN  1504
+DISPLAY_MAZE:ROW_LOOP  148C
+DISPLAY_STATUS      10BE
+DOWN_MESSAGE        179A
+END_GAME            12C8
+ENERGY_PER_MOVE     2
+ERROR_MSG           1689
+EXECUTE_MOVE        11A8
+EXECUTE_MOVE:AFTER_MOVE  11EC
+EXECUTE_MOVE:DONE   1246
+EXECUTE_MOVE:GOAL_REACHED  1212
+EXECUTE_MOVE:NORMAL_MOVE  11E6
+FINAL_LABEL         16FD
+FINAL_MOVES         170B
+FINAL_SCORE_MESSAGE  1739
+GAME_MAP            1558
+GET_INPUT           1158
+GOODBYE             171B
+INCREMENT_MOVES     124C
+INITIALIZE_GAME     1046
+INPUT_CHAR          15A0
+INPUT_MESSAGE       15AE
+INVALID             1198
+LEFT_MESSAGE        17AD
+LEGEND_MSG1         17ED
+LEGEND_MSG2         1804
+LF                  A
+LOSE_BORDER         16D0
+LOSE_GAME           129E
+LOSE_MESSAGE        16E2
+MAIN_LOOP           1008
+MAP_CELLS           40
+MAX_ENERGY          64
+MAX_MOVES           32
+MAZE_SIZE           8
+MOVE_COUNT          15A2
+MOVE_COUNT_LABEL    177C
+MOVE_DOWN           13BA
+MOVE_DOWN:DONE      13F2
+MOVE_LEFT           1382
+MOVE_LEFT:DONE      13B8
+MOVE_RIGHT          13F4
+MOVE_RIGHT:DONE     142C
+MOVE_UP             134A
+MOVE_UP:DONE        1380
+OBSTACLE_CHECK      142E
+OBSTACLE_CHECK:BLOCKED  144E
+OBSTACLE_CHECK:DONE  1450
+OLD_X               15AA
+OLD_Y               15AC
+PLAYER_ENERGY       159C
+PLAYER_ENERGY_LABEL  1770
+PLAYER_SCORE        1598
+PLAYER_SCORE_LABEL  1768
+PLAYER_X            15A6
+PLAYER_Y            15A8
+PRESS_KEY_MSG       17D3
+RIGHT_MESSAGE       17C0
+START               1000
+STATUS_BORDER       1747
+UP_MESSAGE          1787
+VALIDATE_MOVE       1172
+WELCOME             106A
+WELCOME_MESSAGE1    15CF
+WELCOME_MESSAGE2    15EE
+WELCOME_MESSAGE3    160D
+WELCOME_MESSAGE4    162C
+WELCOME_MESSAGE5    164B
+WELCOME_MESSAGE6    166A
+WIN_BORDER          16BF
+WIN_GAME            1274
+WIN_MESSAGE         16AD
